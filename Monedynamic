@@ -1,0 +1,97 @@
+from airflow import DAG
+
+from airflow.operator.python_operator import PythonOperator
+
+from datetime import datetime, timedelta
+
+import pymonetdb
+
+import subprocess
+
+import logging
+
+def execute_monet_quety(industry_name):
+
+    conn = pymonetdb.connect(username='abcd',password='Passw0rd', hostname='lnx2021', port=2023, database='DB_HLX')
+
+    cursor= conn.curson()
+
+    
+
+    query='''select count(*) from "execution_log" where operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",%y-%m-%d')=current_date AND industry_name='{}' and flag='0'''.format(industry_name)
+
+    
+
+    cursor.execute(query)
+
+    
+
+    results = cursor.fetchone()[0]
+
+    results= int(results)
+
+    
+
+    if results>0:
+
+        dag_id=industry_name
+
+        subprocess.run(['airflow', 'dags',dag_id])
+
+        
+
+        update_query = '''UPDATE "execution_log" SET dag_flag=1 WHERE  operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",%y-%m-%d')=current_date AND industry_name='{}' AND dag_flag=0'''.format(industry_name)
+
+        cursor.execute(update_query)
+
+        conn.commit()
+
+    else:
+
+        print("validation issue")
+
+        
+
+    cursor.close()
+
+    conn.close()
+
+    
+
+    
+
+default_args={
+
+    'max_active_runs':1
+
+}
+
+    
+
+dag=Dag(
+
+    "Monet_testing",
+
+    default_args=default_args,
+
+    scheduler_interval='*/5 * * * *',
+
+    start_date =datetime(2023,5,14)
+
+    catchup=False,
+
+)
+
+for industry_name in ['TEC','FIN','IND','CON','EDU']:
+
+    execute_query_task = PythonOperator(
+
+        task_id='execute_monetdb_query_{}'.format(industry_name),
+
+        python_callable=execute_monet_quety,
+
+        dag=dag,
+
+        arguments=[industry_name],
+
+    )
