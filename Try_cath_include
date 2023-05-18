@@ -1,0 +1,80 @@
+
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from datetime import datetime, timedelta
+import pymonetdb
+import subprocess
+import logging
+
+industry_names = ['TEC_POS_CET', 'IND_NAME2', ...]  # Add all 20 industry names
+industries = ['VDW_FAW', 'IND2', ...]  # Add all 20 industries
+
+def execute_monet_query(industry_name, industry):
+    conn = pymonetdb.connect(username='abcd', password='Passw0rd', hostname='lnx2021', port=2023, database='DB_HLX')
+    cursor = conn.cursor()
+    
+    # Set transaction isolation level
+    cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+    
+    query = f'''select count(*) from "execution_log" where operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",'%y-%m-%d')=current_date AND industry_name='{industry_name}' and flag='0' '''
+    cursor.execute(query)
+
+    results = cursor.fetchone()[0]
+    results = int(results)
+
+    query_two = f'''select offline_mart from "LATES_REFRESH_DETAILS" WHERE industry='{industry}' '''
+    cursor.execute(query_two)
+
+    result_two = cursor.fetchone()[0]
+    print(result_two)
+
+    if results > 0:
+        if result_two == 'B':
+            dag_id = f'{industry_name}_B'
+            subprocess.run(['airflow', 'dags', dag_id])
+
+            update_query = f'''UPDATE "execution_log" SET dag_flag=1 WHERE  operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",'%y-%m-%d')=current_date AND industry_name='{industry_name}' AND dag_flag=0 '''
+            try:
+                cursor.execute(update_query)
+                conn.commit()
+            except pymonetdb.Error as e:
+                conn.rollback()
+                print("Error occurred during update:", e)
+
+            update_query_two = f'''UPDATE "LATES_REFRESH_DETAILS" SET offline_mart='A', online_mart='B' where industry='{industry}' '''
+            try:
+                cursor.execute(update_query_two)
+                conn.commit()
+            except pymonetdb.Error as e:
+                conn.rollback()
+                print("Error occurred during update:", e)
+        else:
+            dag_id = f'{industry_name}_A'
+            subprocess.run(['airflow', 'dags', dag_id])
+
+            update_query_two = f'''UPDATE "LATES_REFRESH_DETAILS" SET offline_mart='B', online_mart='A' where industry='{industry}' '''
+            try:
+                cursor.execute(update_query_two)
+                conn.commit()
+            except pymonetdb.Error as e:
+                conn.rollback()
+                print("Error occurred during update:", e)
+    else:
+        print("validation issue")
+
+    cursor.close()
+    conn.close()
+
+default_args = {
+    'max_active_runs': 1
+}
+
+dag = DAG(
+    "Monet_testing",
+    default_args=default_args,
+    schedule_interval='*/5 * * * *',
+    start_date=datetime(2023, 5, 14),
+    catchup=False,
+)
+
+for industry_name, industry in zip
