@@ -1,0 +1,69 @@
+from airflow import DAG
+from airflow.operator.python_operator import PythonOperator
+from datetime import datetime, timedelta
+import pymonetdb
+import subprocess
+import logging
+
+def execute_monet_quety(industry_name, industry):
+    conn = pymonetdb.connect(username='abcd',password='Passw0rd', hostname='lnx2021', port=2023, database='DB_HLX')
+    cursor= conn.curson()
+    
+    query='''select count(*) from "execution_log" where operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",%y-%m-%d')=current_date AND industry_name='{}' and flag='0'''.format(industry_name)
+    
+    cursor.execute(query)
+    
+    results = cursor.fetchone()[0]
+    results= int(results)
+    
+    query_two = '''select offline_mart from "LATES_REFRESH_DETAILS" WHERE industry='{}' '''.format(industry)
+    cursor.execute(query_two)
+    
+    result_two =cursor.fetchone()[0]
+    print(result_two)
+    
+    if results>0:
+        if result_two == 'B':
+            dag_id='{}_POS_{}'.format(industry_name, industry)
+            subprocess.run(['airflow', 'dags',dag_id])
+            
+            update_query = '''UPDATE "execution_log" SET dag_flag=1 WHERE  operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",%y-%m-%d')=current_date AND industry_name='{}' AND dag_flag=0'''.format(industry_name)
+            cursor.execute(update_query)
+            update_query_two= '''UPDATE "LATES_REFRESH_DETAILS" SET offline_mart='A', online_mart='B' where industry='{}' '''.format(industry)
+            cursor.execute(update_query_two)
+            conn.commit()
+        
+        else:
+            dag_id='{}_POS_{}'.format(industry_name, industry)
+            subprocess.run(['airflow', 'dags',dag_id])
+            update_query_two= '''UPDATE "LATES_REFRESH_DETAILS" SET offline_mart='B', online_mart='A' where industry='{}' '''.format(industry)
+            cursor.execute(update_query_two)
+    else:
+        print("validation issue")
+        
+    cursor.close()
+    conn.close()
+    
+    
+default_args={
+    'max_active_runs':1
+}
+    
+dag=Dag(
+    "Monet_testing",
+    default_args=default_args,
+    scheduler_interval='*/5 * * * *',
+    start_date =datetime(2023,5,14)
+    catchup=False,
+)
+
+
+for industry_name in ['TEC','FIN','IND','CON','EDU']:
+    for industry in ['POS','NEG']:
+        execute_query_task = PythonOperator(
+            task_id='execute_monetdb_query_{}_{}'.format(industry_name, industry),
+            python_callable=execute_monet_quety,
+            dag=dag,
+            arguments=[industry_name, industry],
+        )
+
