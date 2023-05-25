@@ -1,0 +1,56 @@
+
+def execute_monet_query(industry_name, industry, credentials):
+    conn = pymonetdb.connect(username=credentials['username'], password=credentials['password'], hostname=credentials['hostname'], port=int(credentials['port']), database=credentials['database'])
+    cursor = conn.cursor()
+
+    with open('/path/to/query.txt', 'r') as file:
+        query = file.read().replace('{industry_name}', industry_name)
+
+    cursor.execute(query)
+
+    results = cursor.fetchone()[0]
+    results = int(results)
+
+    with open('/path/to/query_two.txt', 'r') as file:
+        query_two = file.read().replace('{industry}', industry)
+
+    cursor.execute(query_two)
+
+    result_two = cursor.fetchone()[0]
+    print(result_two)
+
+    if results > 0:
+        if result_two == 'B':
+            dag_id = f'{industry_name}_B'
+            subprocess.run(['airflow', 'dags', dag_id])
+
+            with open('/path/to/update_query.txt', 'r') as file:
+                update_query = file.read().replace('{industry_name}', industry_name)
+
+            cursor.execute(update_query)
+
+            with open('/path/to/update_query_two.txt', 'r') as file:
+                update_query_two = file.read().replace('{industry}', industry)
+
+            cursor.execute(update_query_two)
+            conn.commit()
+        else:
+            dag_id = f'{industry_name}_A'
+            subprocess.run(['airflow', 'dags', dag_id])
+
+            with open('/path/to/update_query_two.txt', 'r') as file:
+                update_query_two = file.read().replace('{industry}', industry)
+
+            cursor.execute(update_query_two)
+    else:
+        print("validation issue")
+
+    cursor.close()
+    conn.close()
+    
+    
+#The contents of query.txt could be something like this
+
+select count(*) from "execution_log" where operation_type='ab' and job_status='SUCCESS' and sys.str_to_date("execution_end_time",'%y-%m-%d')=current_date AND industry_name='{industry_name}' and flag='0'
+select offline_mart from "LATES_REFRESH_DETAILS" WHERE industry='{industry}'
+#The contents of query_two.txt could be something like this
