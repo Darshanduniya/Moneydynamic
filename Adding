@@ -1,0 +1,8 @@
+
+import re
+
+# Modify industry_name to replace invalid characters with underscores
+industry_name = re.sub(r'[^a-zA-Z0-9\-._]', '_', industry_name)
+
+# Construct task_id with the modified industry_name
+task_id = f'execute_monetdb_query_{industry_name}'
