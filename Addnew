@@ -1,0 +1,27 @@
+# ...
+
+# Create tasks dynamically
+
+tasks = []
+
+for industry_name, industry in zip(industry_names, industries):
+
+    task = PythonOperator(
+
+        task_id=f'monet_query_{industry_name}',
+
+        python_callable=execute_monet_query,
+
+        op_kwargs={'industry_name': industry_name, 'industry': industry, 'credentials': monetdb_credentials},
+
+        dag=dag
+
+    )
+
+    tasks.append(task)
+
+# Set task dependencies
+
+for i in range(1, len(tasks)):
+
+    tasks[i] >> tasks[i-1]
