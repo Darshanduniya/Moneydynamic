@@ -1,0 +1,51 @@
+
+import pymonetdb
+import logging
+
+# ... Rest of the code ...
+
+def execute_monet_query(industry_name, industry, monetdb_credentials):
+    conn = pymonetdb.connect(username=monetdb_credentials['username'], password=monetdb_credentials['password'], hostname=monetdb_credentials['hostname'], port=int(monetdb_credentials['port']), database=monetdb_credentials['database'])
+    cursor = conn.cursor()
+
+    # ... Rest of the code ...
+
+    if results > 0:
+        try:
+            if result_two == 'B':
+                # ... Rest of the code ...
+                
+                cursor.execute(query_assign_five)
+                time.sleep(10)
+                print(query_assign_five)
+                conn.commit()
+
+                # ... Rest of the code ...
+                
+            else:
+                # ... Rest of the code ...
+                
+                cursor.execute(query_assign_five)
+                time.sleep(10)
+                print(query_assign_five)
+                conn.commit()
+
+                # ... Rest of the code ...
+        
+        except pymonetdb.DatabaseError as e:
+            logging.error(f"Conflict error occurred: {e}")
+            logging.info("Rerunning the query_assign_five...")
+            cursor.execute(query_assign_five)
+            time.sleep(10)
+            print(query_assign_five)
+            conn.commit()
+            
+            # ... Rest of the code ...
+
+    else:
+        print("No data loaded from the source side")
+
+    cursor.close()
+    conn.close()
+
+# ... Rest of the code ...
